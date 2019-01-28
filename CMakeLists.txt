@@ -3,4 +3,7 @@ project(metro C)
 
 set(CMAKE_C_STANDARD 99)
 
-add_executable(metro main.c)
+add_executable(metro metro.c)
+
+target_link_libraries(metro m)
+target_link_libraries(metro openal)

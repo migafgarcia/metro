@@ -39,17 +39,22 @@ short sawtooth_wave(int time, float sound_hz, unsigned int buffer_size, short vo
     return (short) -(multiplier * M_PI_2 * volume * atan(cot( M_PI * sound_hz * time / buffer_size)));
 }
 
-int main(int argc, char** argv) {
+void init_al() {
+    const char *defname = alcGetString(NULL, ALC_DEFAULT_DEVICE_SPECIFIER);
+    ALCdevice* dev = alcOpenDevice(defname);
+    ALCcontext *ctx = alcCreateContext(dev, NULL);
+    alcMakeContextCurrent(ctx);
+}
 
-    if(argc < 2 || argc > 2) {
-        printf("Invalid arguments");
-        return 0;
-    }
+void exit_al() {
+    ALCcontext* ctx = alcGetCurrentContext();
+    ALCdevice* dev = alcGetContextsDevice(ctx);
+    alcMakeContextCurrent(0);
+    alcDestroyContext(ctx);
+    alcCloseDevice(dev);
+}
 
-
-    signal(SIGINT, stop);
-
-    long bpm = strtol(argv[1], NULL, 10);
+void beep(int bpm) {
 
     float time_s = 0.1f;
     unsigned int sample_rate = 7500;
@@ -57,15 +62,13 @@ int main(int argc, char** argv) {
     unsigned int buffer_size = (unsigned int) (time_s * sample_rate);
     short initial_volume = (short) (0.8 * SHRT_MAX);
 
-    ALCdevice *device;
-    ALCcontext *context;
+
+    init_al();
+
     ALshort data[buffer_size * 2];
     ALuint buffer, source;
     int i;
 
-    device = alcOpenDevice(NULL);
-    context = alcCreateContext(device, NULL);
-    alcMakeContextCurrent(context);
     alGenBuffers(1, &buffer);
 
     for (i = 0; i < buffer_size; i++) {
@@ -85,9 +88,23 @@ int main(int argc, char** argv) {
     alSourceStop(source);
     alDeleteSources(1, &source);
     alDeleteBuffers(1, &buffer);
-    alcMakeContextCurrent(NULL);
-    alcDestroyContext(context);
-    alcCloseDevice(device);
+}
+
+int main(int argc, char** argv) {
+
+    if(argc < 2 || argc > 2) {
+        printf("Invalid arguments");
+        return 0;
+    }
+
+
+    signal(SIGINT, stop);
+
+    long bpm = strtol(argv[1], NULL, 10);
+
+    beep(bpm);
+
+    exit_al();
 
     return 0;
 }

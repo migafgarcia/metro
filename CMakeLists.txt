@@ -12,3 +12,4 @@ add_executable(metro metro.c)
 
 target_link_libraries(metro m)
 target_link_libraries(metro openal)
+target_link_libraries(metro audio)

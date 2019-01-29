@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="metro" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="106" WORKING_DIR="file://$PROJECT_DIR$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="metro" TARGET_NAME="metro" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="metro" RUN_TARGET_NAME="metro">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>

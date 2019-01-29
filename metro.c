@@ -7,6 +7,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+#include <audio/wave.h>
+#include <stdbool.h>
+
 
 static volatile int running = 1;
 
@@ -54,6 +57,26 @@ void exit_al() {
     alcCloseDevice(dev);
 }
 
+static inline ALenum to_al_format(short channels, short samples)
+{
+    bool stereo = (channels > 1);
+
+    switch (samples) {
+        case 16:
+            if (stereo)
+                return AL_FORMAT_STEREO16;
+            else
+                return AL_FORMAT_MONO16;
+        case 8:
+            if (stereo)
+                return AL_FORMAT_STEREO8;
+            else
+                return AL_FORMAT_MONO8;
+        default:
+            return -1;
+    }
+}
+
 void beep(int bpm) {
 
     float time_s = 0.1f;
@@ -62,8 +85,6 @@ void beep(int bpm) {
     unsigned int buffer_size = (unsigned int) (time_s * sample_rate);
     short initial_volume = (short) (0.8 * SHRT_MAX);
 
-
-    init_al();
 
     ALshort data[buffer_size * 2];
     ALuint buffer, source;
@@ -90,6 +111,126 @@ void beep(int bpm) {
     alDeleteBuffers(1, &buffer);
 }
 
+void wav(int bpm){
+    int ret;
+    WaveInfo *upWave, *downWave;
+    char *bufferData;
+    ALuint upBuffer, upSource;
+    ALuint downBuffer, downSource;
+    ALfloat listenerOri[] = { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f };
+
+
+
+    /* set orientation */
+    alListener3f(AL_POSITION, 0, 0, 1.0f);
+    alListener3f(AL_VELOCITY, 0, 0, 0);
+    alListenerfv(AL_ORIENTATION, listenerOri);
+
+    alGenSources((ALuint)1, &upSource);
+
+    alSourcef(upSource, AL_PITCH, 1);
+    alSourcef(upSource, AL_GAIN, 1);
+    alSource3f(upSource, AL_POSITION, 0, 0, 0);
+    alSource3f(upSource, AL_VELOCITY, 0, 0, 0);
+    alSourcei(upSource, AL_LOOPING, AL_FALSE);
+
+    alGenBuffers(1, &upBuffer);
+
+    /* load data */
+	upWave = WaveOpenFileForReading("up.wav");
+	if (!upWave) {
+		fprintf(stderr, "failed to read upWave file\n");
+		return;
+	}
+
+	ret = WaveSeekFile(0, upWave);
+	if (ret) {
+		fprintf(stderr, "failed to seek upWave file\n");
+		return;
+	}
+
+	bufferData = malloc(upWave->dataSize);
+	if (!bufferData) {
+		perror("malloc");
+		return;
+	}
+
+	ret = WaveReadFile(bufferData, upWave->dataSize, upWave);
+	if (ret != upWave->dataSize) {
+		fprintf(stderr, "short read: %d, want: %d\n", ret, upWave->dataSize);
+		return;
+	}
+
+	alBufferData(upBuffer, to_al_format(upWave->channels, upWave->bitsPerSample),
+			bufferData, upWave->dataSize, upWave->sampleRate);
+
+
+    alSourcei(upSource, AL_BUFFER, upBuffer);
+
+
+
+    alGenSources((ALuint)1, &downSource);
+
+    alSourcef(downSource, AL_PITCH, 1);
+    alSourcef(downSource, AL_GAIN, 1);
+    alSource3f(downSource, AL_POSITION, 0, 0, 0);
+    alSource3f(downSource, AL_VELOCITY, 0, 0, 0);
+    alSourcei(downSource, AL_LOOPING, AL_FALSE);
+
+    alGenBuffers(1, &downBuffer);
+
+    /* load data */
+    downWave = WaveOpenFileForReading("down.wav");
+    if (!downWave) {
+        fprintf(stderr, "failed to read downWave file\n");
+        return;
+    }
+
+    ret = WaveSeekFile(0, downWave);
+    if (ret) {
+        fprintf(stderr, "failed to seek downWave file\n");
+        return;
+    }
+
+    bufferData = malloc(downWave->dataSize);
+    if (!bufferData) {
+        perror("malloc");
+        return;
+    }
+
+    ret = WaveReadFile(bufferData, downWave->dataSize, downWave);
+    if (ret != downWave->dataSize) {
+        fprintf(stderr, "short read: %d, want: %d\n", ret, downWave->dataSize);
+        return;
+    }
+
+    alBufferData(downBuffer, to_al_format(downWave->channels, downWave->bitsPerSample),
+                 bufferData, downWave->dataSize, downWave->sampleRate);
+
+
+    alSourcei(downSource, AL_BUFFER, downBuffer);
+
+    bool up = 1;
+
+    while (running) {
+        if(up) {
+            alSourcePlay(upSource);
+            up = 0;
+        }
+        else {
+            alSourcePlay(downSource);
+            up = 1;
+        }
+
+        usleep((__useconds_t) (60000000 / bpm));
+    }
+
+    alDeleteSources(1, &upSource);
+    alDeleteSources(1, &downSource);
+    alDeleteBuffers(1, &upBuffer);
+    alDeleteBuffers(1, &downBuffer);
+}
+
 int main(int argc, char** argv) {
 
     if(argc < 2 || argc > 2) {
@@ -100,9 +241,13 @@ int main(int argc, char** argv) {
 
     signal(SIGINT, stop);
 
+    init_al();
+
     long bpm = strtol(argv[1], NULL, 10);
 
-    beep(bpm);
+//    beep(bpm);
+    wav(bpm);
+
 
     exit_al();
 

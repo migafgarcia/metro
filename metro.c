@@ -1,84 +1,94 @@
-#include <stdio.h>
 #include <AL/al.h>
 #include <AL/alc.h>
-#include <stdlib.h>
 #include <math.h>
-#include <unistd.h>
+#include <stdio.h>
+#include <limits.h>
 #include <signal.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 
-static volatile int keepRunning = 1;
+static volatile int running = 1;
 
 void stop() {
-    keepRunning = 0;
+    running = 0;
 }
 
-void init_al()
-{
-    const char *defname = alcGetString(NULL, ALC_DEFAULT_DEVICE_SPECIFIER);
-    ALCdevice* dev = alcOpenDevice(defname);
-    ALCcontext *ctx = alcCreateContext(dev, NULL);
-    alcMakeContextCurrent(ctx);
+int sign(double value) {
+    if(value < 0)
+        return -1;
+    else if(value == 0)
+        return 0;
+    else
+        return 1;
 }
 
-void exit_al()
-{
-    ALCcontext* ctx = alcGetCurrentContext();
-    ALCdevice* dev = alcGetContextsDevice(ctx);
-    alcMakeContextCurrent(0);
-    alcDestroyContext(ctx);
-    alcCloseDevice(dev);
+double cot(double x) {
+    return cos(x) / sin(x);
 }
 
-void beep(int bpm) {
-
-
-    float freq = 440;
-    float seconds = 0.2;
-    ALuint buf;
-    alGenBuffers(1, &buf);
-
-    unsigned sample_rate = 44100;
-    size_t buf_size = (size_t) (seconds * sample_rate);
-    short *samples = malloc(buf_size * sizeof(short));
-
-    for (unsigned i = 0; i < buf_size; i++)
-        samples[i] = (short) (10000 * sin(1.2 * M_PI * i * freq / sample_rate));
-
-    alBufferData(buf, AL_FORMAT_STEREO16, samples, buf_size, sample_rate);
-
-
-    ALuint src;
-    alGenSources(1, &src);
-    alSourcei(src, AL_BUFFER, buf);
-
-    while (keepRunning) {
-        alSourcePlay(src);
-        usleep((__useconds_t) (60000000 / bpm));
-    }
-
-    free(samples);
-
-    alSourceStopv(1,&src);
-    alDeleteSources(1,&src);
-    alDeleteBuffers(1,&buf);
+short sine_wave(int time, float sound_hz, unsigned int buffer_size, short volume, int multiplier) {
+    return (short) (multiplier * volume *  sin(M_2_PI * sound_hz * time / buffer_size));
 }
 
+short square_wave(int time, float sound_hz, unsigned int buffer_size, short volume, int multiplier) {
+    return (short) (multiplier * volume * sign(sin( sound_hz * time / buffer_size)));
+}
 
-int main(int argc, char **argv) {
+short sawtooth_wave(int time, float sound_hz, unsigned int buffer_size, short volume, int multiplier) {
+    return (short) -(multiplier * M_PI_2 * volume * atan(cot( M_PI * sound_hz * time / buffer_size)));
+}
+
+int main(int argc, char** argv) {
 
     if(argc < 2 || argc > 2) {
         printf("Invalid arguments");
         return 0;
     }
 
+
     signal(SIGINT, stop);
 
-    init_al();
+    long bpm = strtol(argv[1], NULL, 10);
 
-    int bpm = atoi(argv[1]);
+    float time_s = 0.1f;
+    unsigned int sample_rate = 7500;
+    float sound_hz = 700;
+    unsigned int buffer_size = (unsigned int) (time_s * sample_rate);
+    short initial_volume = (short) (0.8 * SHRT_MAX);
 
-    beep(bpm);
+    ALCdevice *device;
+    ALCcontext *context;
+    ALshort data[buffer_size * 2];
+    ALuint buffer, source;
+    int i;
 
-    exit_al();
+    device = alcOpenDevice(NULL);
+    context = alcCreateContext(device, NULL);
+    alcMakeContextCurrent(context);
+    alGenBuffers(1, &buffer);
+
+    for (i = 0; i < buffer_size; i++) {
+        data[i * 2] = sine_wave(i, sound_hz, buffer_size, (short) (initial_volume - (i * initial_volume / buffer_size)), 1);
+        data[i * 2 + 1] = sine_wave(i, sound_hz, buffer_size, (short) (initial_volume - (i * initial_volume / buffer_size)), -1);
+    }
+
+    alBufferData(buffer, AL_FORMAT_STEREO16, data, sizeof(data), sample_rate);
+    alGenSources(1, &source);
+    alSourcei(source, AL_BUFFER, buffer);
+
+    while (running) {
+        alSourcePlay(source);
+        usleep((__useconds_t) (60000000 / bpm));
+    }
+
+    alSourceStop(source);
+    alDeleteSources(1, &source);
+    alDeleteBuffers(1, &buffer);
+    alcMakeContextCurrent(NULL);
+    alcDestroyContext(context);
+    alcCloseDevice(device);
+
+    return 0;
 }
+
